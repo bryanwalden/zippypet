@@ -34,16 +34,15 @@ void setup() {
     auto cfg = M5.config();
 #if defined(WOKWI_SIM)
     cfg.internal_imu = false; // Simulator only: prevents I2C probe hang when the IMU is absent
-    cfg.internal_mic = false;
 #else
     cfg.internal_imu = true;  // Real M5StickS3: BMI270 IMU drives jump/shake/tilt/pedometer
-    cfg.internal_mic = true;  // Real M5StickS3: SPM1423 PDM/I2S Mic for Clap/Voice reactions
 #endif
 #if defined(ARDUINO_M5STACK_CORES3)
     cfg.internal_spk = false; // Prevent AW88298 amplifier probe hang in Wokwi
 #else
     cfg.internal_spk = true;
 #endif
+    cfg.internal_mic = false;
     M5.begin(cfg);
 
     if (M5.Display.width() == 0) {
@@ -113,41 +112,6 @@ void loop() {
     inputMgr.update(now);
     motionMgr.update(now);
     audioMgr.update(now);
-
-    // ==========================================
-    // 0. Upgrade 2: Process Microphone Clap / Voice Reactions
-    // ==========================================
-    if (audioMgr.popVoiceTrigger()) {
-        powerMgr.recordInteraction(now);
-        if (petMgr.getState().isSleeping) {
-            petMgr.setSleep(false);
-            displayMgr.setAnimState(ANIM_IDLE);
-            displayMgr.setBrightness(255);
-            displayMgr.showToast("VOICE WAKE!");
-            audioMgr.beepSelect();
-        } else if (displayMgr.isMiniGameActive()) {
-            displayMgr.handleMiniGameInput();
-            displayMgr.showToast("SONIC STRIKE!");
-            audioMgr.beepRoar();
-        } else if (displayMgr.isBattleActive()) {
-            displayMgr.handleBattleInput();
-            audioMgr.beepRoar();
-        } else if (petMgr.getState().stage == STAGE_EGG) {
-            petMgr.getStateMutable().totalInteractions++;
-            if (petMgr.evaluateEvolution()) {
-                displayMgr.showToast("VOICE HATCH!");
-            } else {
-                displayMgr.showToast("EGG HEARD YOU!");
-                audioMgr.beepSelect();
-            }
-        } else {
-            displayMgr.triggerSecretStars();
-            displayMgr.showToast("CLAP CHEER! +EXP");
-            petMgr.addExpWithBonus(2);
-            petMgr.evaluateEvolution();
-            audioMgr.beepSecretReward();
-        }
-    }
 
     // ==========================================
     // 1. Process Input Events

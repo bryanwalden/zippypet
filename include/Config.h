@@ -4,7 +4,7 @@
 #include "GeneratedSprites.h"
 
 // Firmware Release Version for GitHub Pull-OTA
-#define FIRMWARE_VERSION     3
+#define FIRMWARE_VERSION     4
 
 // ==========================================
 // Hardware & Display Configuration
