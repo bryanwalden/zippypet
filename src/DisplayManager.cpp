@@ -447,10 +447,10 @@ void DisplayManager::drawStats(const PetStateManager& petMgr) {
         _canvas.fillRect(18, 134, barW, 4, 0x07FF);
     }
 
-    // Dismiss Hint
+    // Dismiss & Reset Hint
     _canvas.setTextColor(0x9CD3, 0x18C3);
-    _canvas.setCursor(16, 155);
-    _canvas.print("Press A or B to Exit");
+    _canvas.setCursor(14, 152);
+    _canvas.print("A/B:Exit  Hold B:Egg");
 }
 
 // ==========================================

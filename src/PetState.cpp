@@ -16,11 +16,11 @@ void PetStateManager::begin() {
 }
 
 void PetStateManager::resetToEgg() {
-    _state.species = SPECIES_CERATO_ROOKIE;
-    _state.stage = STAGE_ROOKIE;
+    _state.species = SPECIES_CERATO_BABY;
+    _state.stage = STAGE_EGG;
     _state.hunger = 4;
     _state.strength = 4;
-    _state.discipline = 20;
+    _state.discipline = 0;
     _state.exp = 0;
     _state.lastTickTime = millis();
     _state.lastSaveTime = millis();
@@ -39,12 +39,8 @@ bool PetStateManager::load() {
         return false;
     }
 
-    _state.species = _prefs.getUChar("species", SPECIES_CERATO_ROOKIE);
-    _state.stage = _prefs.getUChar("stage", STAGE_ROOKIE);
-    if (_state.stage == STAGE_EGG) {
-        _state.species = SPECIES_CERATO_ROOKIE;
-        _state.stage = STAGE_ROOKIE;
-    }
+    _state.species = _prefs.getUChar("species", SPECIES_CERATO_BABY);
+    _state.stage = _prefs.getUChar("stage", STAGE_EGG);
     _state.hunger = _prefs.getUChar("hunger", 4);
     _state.strength = _prefs.getUChar("strength", 4);
     _state.discipline = _prefs.getUShort("discipline", 20);
@@ -290,6 +286,9 @@ bool PetStateManager::needsAlert() const {
 }
 
 const char* PetStateManager::getSpeciesName() const {
+    if (_state.stage == STAGE_EGG) {
+        return "Dino Egg";
+    }
     switch (_state.species) {
         case SPECIES_CERATO_BABY:     return "Baby Cerato";
         case SPECIES_CERATO_JUVENILE: return "Juvenile Cerato";

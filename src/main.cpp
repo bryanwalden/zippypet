@@ -168,9 +168,14 @@ void loop() {
             break;
 
         case INPUT_EVENT_B_LONG_PRESS:
-            // Return to Idle / Dismiss menu
+            // Reset pet to Level 0 (Egg) and save to NVS
+            petMgr.resetToEgg();
+            petMgr.save();
             displayMgr.closeAllOverlays();
-            audioMgr.beepSelect();
+            displayMgr.setAnimState(ANIM_IDLE);
+            displayMgr.showToast("RESET TO EGG!");
+            audioMgr.beepLevelUp();
+            Serial.println("[RESET] Pet reset to Stage 0 (Egg)!");
             break;
 
         case INPUT_EVENT_A_CLICK:
@@ -239,6 +244,16 @@ void loop() {
             }
             break;
 
+        case INPUT_EVENT_STAGE_0:
+            petMgr.resetToEgg();
+            petMgr.save();
+            displayMgr.closeAllOverlays();
+            displayMgr.setAnimState(ANIM_IDLE);
+            displayMgr.showToast("RESET TO EGG!");
+            audioMgr.beepLevelUp();
+            Serial.println("[EVO] Reset to Level 0: Egg");
+            break;
+
         case INPUT_EVENT_STAGE_1:
         case INPUT_EVENT_STAGE_2:
         case INPUT_EVENT_STAGE_3:
@@ -249,6 +264,7 @@ void loop() {
             uint8_t targetStage = (uint8_t)(inEv - INPUT_EVENT_STAGE_1 + 1);
             petMgr.getStateMutable().stage = targetStage;
             petMgr.getStateMutable().species = targetStage - 1;
+            petMgr.save();
             displayMgr.triggerEvolutionSequence(targetStage);
             audioMgr.beepLevelUp();
             Serial.printf("[EVO] Level changed to %d: %s (%s)\n", targetStage, petMgr.getSpeciesName(), petMgr.getStageName());

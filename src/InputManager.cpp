@@ -55,8 +55,8 @@ void InputManager::update(uint32_t nowMillis) {
             _pendingEvent = INPUT_EVENT_SECRET_REWARD;
             _interactedThisFrame = true;
             return;
-        } else if (c >= '1' && c <= '7') {
-            _pendingEvent = (InputEvent)(INPUT_EVENT_STAGE_1 + (c - '1'));
+        } else if (c >= '0' && c <= '7') {
+            _pendingEvent = (InputEvent)(INPUT_EVENT_STAGE_0 + (c - '0'));
             _interactedThisFrame = true;
             return;
         } else if (c == 'r' || c == 'R') {
