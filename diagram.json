@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "author": "Zippypet",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-m5stack-core-s3",
+      "id": "board",
+      "top": -179.23,
+      "left": -81.79,
+      "attrs": {
+        "flashSize": "16",
+        "psramSize": "8",
+        "serialInterface": "USB_SERIAL_JTAG"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btnA",
+      "top": -60,
+      "left": 160,
+      "attrs": {
+        "color": "red",
+        "label": "Btn A (Select)"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btnB",
+      "top": 20,
+      "left": 160,
+      "attrs": {
+        "color": "blue",
+        "label": "Btn B (Menu)"
+      }
+    }
+  ],
+  "connections": [
+    [ "btnA:1.l", "board:G1", "red", [ "h0" ] ],
+    [ "btnA:2.l", "board:GND.1", "black", [ "h0" ] ],
+    [ "btnB:1.l", "board:G2", "blue", [ "h0" ] ],
+    [ "btnB:2.l", "board:GND.1", "black", [ "h0" ] ]
+  ],
+  "dependencies": {}
+}

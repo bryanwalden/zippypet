@@ -1,0 +1,16 @@
+# PlatformIO & IDE
+.pio/
+.vscode/
+
+# Local secrets
+include/Secrets.h
+
+# Compiled binaries & scratch files
+*.bin
+*.elf
+__pycache__/
+*.pyc
+scratch/
+crop4.png
+lcd_crop.png
+
