@@ -1,8 +1,10 @@
 #include "GitHubOtaManager.h"
+#include <Preferences.h>
 #include <esp_system.h>
 
 [[maybe_unused]] static const char* GITHUB_VERSION_URL = "https://github.com/bryanwalden/zippypet/releases/latest/download/version.json";
 [[maybe_unused]] static const char* GITHUB_FIRMWARE_URL = "https://github.com/bryanwalden/zippypet/releases/latest/download/firmware.bin";
+static const char* WIFI_NVS_NAMESPACE = "zp_wifi";
 
 GitHubOtaManager::GitHubOtaManager() {}
 
@@ -19,14 +21,7 @@ void GitHubOtaManager::checkAndPerformUpdate(DisplayManager* displayMgr) {
 
     Serial.printf("[OTA] Cold boot detected. Local Firmware Version: %d\n", FIRMWARE_VERSION);
 
-    // Skip if default placeholder credentials are present
-    if (strcmp(WIFI_SSID, "YOUR_WIFI_SSID") == 0 || strlen(WIFI_SSID) == 0) {
-        Serial.println("[OTA] Default or empty Wi-Fi credentials in Secrets.h. Skipping OTA check.");
-        return;
-    }
-
     // Connect to Wi-Fi with strict 5-second timeout for seamless offline startup
-    Serial.printf("[OTA] Attempting Wi-Fi connect to '%s' (5s timeout)...\n", WIFI_SSID);
     if (!connectWifi(5000)) {
         Serial.println("[OTA] Wi-Fi offline or timed out after 5s. Proceeding to normal gameplay.");
         WiFi.disconnect(true);
@@ -61,8 +56,31 @@ void GitHubOtaManager::checkAndPerformUpdate(DisplayManager* displayMgr) {
 }
 
 bool GitHubOtaManager::connectWifi(uint32_t timeoutMs) {
+    Preferences prefs;
+    prefs.begin(WIFI_NVS_NAMESPACE, false);
+
+    String ssid = WIFI_SSID;
+    String pass = WIFI_PASS;
+
+    if (ssid.length() > 0 && ssid != "YOUR_WIFI_SSID") {
+        // Persist valid compile-time credentials to NVS so future GitHub OTA builds inherit them
+        prefs.putString("ssid", ssid);
+        prefs.putString("pass", pass);
+    } else {
+        // Running a GitHub Actions OTA binary: load stored Wi-Fi credentials from NVS
+        ssid = prefs.getString("ssid", "");
+        pass = prefs.getString("pass", "");
+    }
+    prefs.end();
+
+    if (ssid.length() == 0 || ssid == "YOUR_WIFI_SSID") {
+        Serial.println("[OTA] No Wi-Fi credentials in Secrets.h or NVS. Skipping OTA check.");
+        return false;
+    }
+
+    Serial.printf("[OTA] Attempting Wi-Fi connect to '%s' (%ums timeout)...\n", ssid.c_str(), (unsigned)timeoutMs);
     WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    WiFi.begin(ssid.c_str(), pass.c_str());
 
     uint32_t startTime = millis();
     while (WiFi.status() != WL_CONNECTED && (millis() - startTime < timeoutMs)) {

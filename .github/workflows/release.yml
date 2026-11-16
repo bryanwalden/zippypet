@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -32,8 +31,8 @@ jobs:
           mkdir -p include
           cat << 'EOF' > include/Secrets.h
           #pragma once
-          #define WIFI_SSID "${{ secrets.WIFI_SSID }}"
-          #define WIFI_PASS "${{ secrets.WIFI_PASS }}"
+          #define WIFI_SSID "YOUR_WIFI_SSID"
+          #define WIFI_PASS "YOUR_WIFI_PASSWORD"
           EOF
 
       - name: Build sprites header
