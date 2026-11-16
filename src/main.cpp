@@ -34,20 +34,18 @@ void setup() {
     auto cfg = M5.config();
 #if defined(WOKWI_SIM)
     cfg.internal_imu = false; // Simulator only: prevents I2C probe hang when the IMU is absent
+    cfg.internal_mic = false;
 #else
-    cfg.internal_imu = true;  // Real M5StickS3: BMI270 IMU drives jump/shake/tilt
+    cfg.internal_imu = true;  // Real M5StickS3: BMI270 IMU drives jump/shake/tilt/pedometer
+    cfg.internal_mic = true;  // Real M5StickS3: SPM1423 PDM/I2S Mic for Clap/Voice reactions
 #endif
 #if defined(ARDUINO_M5STACK_CORES3)
     cfg.internal_spk = false; // Prevent AW88298 amplifier probe hang in Wokwi
 #else
     cfg.internal_spk = true;
 #endif
-    cfg.internal_mic = false;
     M5.begin(cfg);
 
-    // In Wokwi simulation, M5Unified autodetect falls back to AtomS3Lite / StampS3 (Display: 0x0)
-    // because AW9523 & AXP2101 power management ICs are not simulated.
-    // Manually attach CoreS3 SPI ILI9342 panel in native 320x240 landscape:
     if (M5.Display.width() == 0) {
         Serial.println("[BOOT] Display: 0x0 detected. Initializing CoreS3 Wokwi panel (320x240)...");
         auto bus = new lgfx::Bus_SPI();
@@ -58,9 +56,9 @@ void setup() {
         bus_cfg.spi_mode = 0;
         bus_cfg.pin_sclk = 36;
         bus_cfg.pin_mosi = 37;
-        bus_cfg.pin_miso = -1; // Must be -1 to prevent pin conflict with DC
-        bus_cfg.pin_dc   = 35; // Pin 35 is DC
-        bus_cfg.dma_channel = 0; // Disable DMA in simulation to prevent 32KB buffer truncation in Wokwi!
+        bus_cfg.pin_miso = -1;
+        bus_cfg.pin_dc   = 35;
+        bus_cfg.dma_channel = 0;
         bus->config(bus_cfg);
 
         auto panel = new lgfx::Panel_ILI9342();
@@ -69,14 +67,13 @@ void setup() {
         panel_cfg.pin_rst = -1;
         panel_cfg.panel_width = 320;
         panel_cfg.panel_height = 240;
-        panel_cfg.offset_rotation = 0; // No offset; rotation is chosen once, in DisplayManager::begin()
+        panel_cfg.offset_rotation = 0;
         panel_cfg.invert = false;
         panel->config(panel_cfg);
         panel->setBus(bus);
 
         M5.Display.setPanel(panel);
         panel->init(true);
-        // NOTE: no setRotation() here - DisplayManager::begin() owns rotation.
         M5.Display.setColorDepth(16);
         M5.Display.setBrightness(255);
         M5.Display.fillScreen(COLOR_BLACK);
@@ -84,11 +81,9 @@ void setup() {
 
     Serial.printf("[BOOT] Board ID: %d, Display: %dx%d\n", (int)M5.getBoard(), (int)M5.Display.width(), (int)M5.Display.height());
 
-    // Initialize display first
     displayMgr.begin();
     Serial.println("[BOOT] Display initialized.");
 
-    // Initialize all modular subsystems
     petMgr.begin();
     motionMgr.begin();
     audioMgr.begin();
@@ -98,37 +93,61 @@ void setup() {
     // Check for GitHub Release OTA on cold boot (Wi-Fi 5s timeout, powers off Wi-Fi after)
     gitHubOtaMgr.checkAndPerformUpdate(&displayMgr);
 
-    // Play startup chirp if audio is enabled
     audioMgr.beepSelect();
-
-    // Render initial frame immediately so display is visible at boot
     displayMgr.update(petMgr, 0.0f, millis());
     Serial.println("[BOOT] Pet simulation running!");
 
     Serial.println("\n[INPUT] Ready! Controls:");
-    Serial.println("  - Btn A (Red Button / GPIO 1 / 'a'): Select / Poke / Confirm");
-    Serial.println("  - Btn B (Blue Button / GPIO 2 / 'b'): Open Menu / Cycle Item");
-    Serial.println("  - Btn B Hold (Hold Blue Button / 'h'): Dismiss / Return to Idle");
-    Serial.println("  - Keys '1' to '7': Switch Evolution Level (Lv1 Baby to Lv7 Mecha Titan)");
-    Serial.println("  - 'r': Roar (Attack / Laser blast)");
-    Serial.println("  - 'e': Eat (Food / Energy core)");
-    Serial.println("  - 'j': Jump");
-    Serial.println("  - 'z': Sleep / Wake toggle");
-    Serial.println("  - 'p': Happy celebration");
-    Serial.println("  - 't': Toggle Prehistoric Sky (Dawn, Day, Sunset, Night with Stars)");
-    Serial.println("  - 's': Secret Parent Reward (+10 Disc)\n");
+    Serial.println("  - Btn A: Activate Menu / Strike / Cycle Gear in Stats");
+    Serial.println("  - Btn B: Cycle 5-Icon Dock (FEED, TRAIN, CLEAN, BATTLE, STATS)");
+    Serial.println("  - Btn B Hold (1.5s): Reset to Level 0 (Dino Egg) / Legacy Gen+");
+    Serial.println("  - Keys '0' to '7': Switch Stage (0=Egg, 1..7=Levels 1..7)");
+    Serial.println("  - 't': Toggle Sky | 'w': Cycle Weather (Clear, Ash, Acid Rain, Eruption)\n");
 }
 
 void loop() {
     uint32_t now = millis();
 
-    // Refresh M5 hardware states (buttons, imu, power)
     M5.update();
 
-    // Update input, motion, and audio subsystems
     inputMgr.update(now);
     motionMgr.update(now);
     audioMgr.update(now);
+
+    // ==========================================
+    // 0. Upgrade 2: Process Microphone Clap / Voice Reactions
+    // ==========================================
+    if (audioMgr.popVoiceTrigger()) {
+        powerMgr.recordInteraction(now);
+        if (petMgr.getState().isSleeping) {
+            petMgr.setSleep(false);
+            displayMgr.setAnimState(ANIM_IDLE);
+            displayMgr.setBrightness(255);
+            displayMgr.showToast("VOICE WAKE!");
+            audioMgr.beepSelect();
+        } else if (displayMgr.isMiniGameActive()) {
+            displayMgr.handleMiniGameInput();
+            displayMgr.showToast("SONIC STRIKE!");
+            audioMgr.beepRoar();
+        } else if (displayMgr.isBattleActive()) {
+            displayMgr.handleBattleInput();
+            audioMgr.beepRoar();
+        } else if (petMgr.getState().stage == STAGE_EGG) {
+            petMgr.getStateMutable().totalInteractions++;
+            if (petMgr.evaluateEvolution()) {
+                displayMgr.showToast("VOICE HATCH!");
+            } else {
+                displayMgr.showToast("EGG HEARD YOU!");
+                audioMgr.beepSelect();
+            }
+        } else {
+            displayMgr.triggerSecretStars();
+            displayMgr.showToast("CLAP CHEER! +EXP");
+            petMgr.addExpWithBonus(2);
+            petMgr.evaluateEvolution();
+            audioMgr.beepSecretReward();
+        }
+    }
 
     // ==========================================
     // 1. Process Input Events
@@ -144,14 +163,13 @@ void loop() {
 
     switch (inEv) {
         case INPUT_EVENT_SECRET_REWARD:
-            // Holding Btn B while double-clicking Btn A
             petMgr.rewardDiscipline(10);
             displayMgr.triggerSecretStars();
             audioMgr.beepSecretReward();
             break;
 
         case INPUT_EVENT_B_SHORT_CLICK:
-            if (displayMgr.isMiniGameActive()) {
+            if (displayMgr.isMiniGameActive() || displayMgr.isBattleActive()) {
                 displayMgr.closeAllOverlays();
                 audioMgr.beepSelect();
             } else if (displayMgr.isStatsOpen()) {
@@ -168,25 +186,35 @@ void loop() {
             break;
 
         case INPUT_EVENT_B_LONG_PRESS:
-            // Reset pet to Level 0 (Egg) and save to NVS
+            // Reset pet to Level 0 (Egg) — advances Generation if Level 5+ (Idea 10)
             petMgr.resetToEgg();
             petMgr.save();
             displayMgr.closeAllOverlays();
             displayMgr.setAnimState(ANIM_IDLE);
-            displayMgr.showToast("RESET TO EGG!");
+            if (petMgr.getState().generation > 1) {
+                char buf[24];
+                snprintf(buf, sizeof(buf), "GEN %d LEGACY EGG!", (int)petMgr.getState().generation);
+                displayMgr.showToast(buf);
+            } else {
+                displayMgr.showToast("RESET TO EGG!");
+            }
             audioMgr.beepLevelUp();
-            Serial.println("[RESET] Pet reset to Stage 0 (Egg)!");
+            Serial.printf("[RESET] Pet reset to Stage 0 (Egg), Gen %d!\n", (int)petMgr.getState().generation);
             break;
 
         case INPUT_EVENT_A_CLICK:
-            // If training mini-game is active, handle strike timing
             if (displayMgr.isMiniGameActive()) {
                 displayMgr.handleMiniGameInput();
                 audioMgr.beepJump();
                 break;
             }
 
-            // Wake pet if sleeping
+            if (displayMgr.isBattleActive()) {
+                displayMgr.handleBattleInput();
+                audioMgr.beepRoar();
+                break;
+            }
+
             if (petMgr.getState().isSleeping) {
                 petMgr.setSleep(false);
                 displayMgr.setAnimState(ANIM_IDLE);
@@ -195,11 +223,14 @@ void loop() {
                 break;
             }
 
+            // Inside Stats screen, pressing A cycles equipped Relic/Accessory (Idea 7)!
             if (displayMgr.isStatsOpen()) {
-                displayMgr.toggleStatsOverlay();
+                petMgr.cycleAccessory();
+                char toastBuf[24];
+                snprintf(toastBuf, sizeof(toastBuf), "GEAR: %s", petMgr.getAccessoryName());
+                displayMgr.showToast(toastBuf);
                 audioMgr.beepSelect();
             } else if (displayMgr.isMenuOpen()) {
-                // Select highlighted HUD item (keep menu active so A always activates the highlighted icon)
                 MenuItem item = displayMgr.getSelectedMenuItem();
                 Serial.printf("[MENU] A pressed -> select item %d\n", (int)item);
                 switch (item) {
@@ -214,7 +245,7 @@ void loop() {
                     case MENU_TRAIN:
                         displayMgr.startMiniGame();
                         audioMgr.beepSelect();
-                        Serial.println("[GAME] Meteor Strike Training started!");
+                        Serial.println("[GAME] Training Mini-Game started!");
                         break;
 
                     case MENU_CLEAN:
@@ -229,6 +260,12 @@ void loop() {
                         Serial.println("[ACTION] Geyser waterfall bath triggered!");
                         break;
 
+                    case MENU_BATTLE:
+                        displayMgr.startBattle(petMgr.getState().stage);
+                        audioMgr.beepRoar();
+                        Serial.println("[BATTLE] Wireless ESP-NOW / Rival Dino Battle started!");
+                        break;
+
                     case MENU_STATS:
                         displayMgr.toggleStatsOverlay();
                         audioMgr.beepSelect();
@@ -238,7 +275,6 @@ void loop() {
                         break;
                 }
             } else {
-                // Normal view: Interact / Jump
                 displayMgr.triggerJump();
                 audioMgr.beepJump();
             }
@@ -264,6 +300,7 @@ void loop() {
             uint8_t targetStage = (uint8_t)(inEv - INPUT_EVENT_STAGE_1 + 1);
             petMgr.getStateMutable().stage = targetStage;
             petMgr.getStateMutable().species = targetStage - 1;
+            petMgr.checkUnlocks();
             petMgr.save();
             displayMgr.triggerEvolutionSequence(targetStage);
             audioMgr.beepLevelUp();
@@ -276,40 +313,40 @@ void loop() {
             Serial.println("[SKY] Toggled day/night sky cycle!");
             break;
 
+        case INPUT_EVENT_CYCLE_WEATHER:
+            displayMgr.cycleWeather();
+            audioMgr.beepSelect();
+            Serial.println("[WEATHER] Cycled prehistoric weather!");
+            break;
+
         case INPUT_EVENT_ACTION_ROAR:
             displayMgr.triggerRoar();
             audioMgr.beepRoar();
-            Serial.println("[ACTION] Roar blast!");
             break;
 
         case INPUT_EVENT_ACTION_JUMP:
             displayMgr.triggerJump();
             audioMgr.beepJump();
-            Serial.println("[ACTION] Jump!");
             break;
 
         case INPUT_EVENT_ACTION_EAT:
             displayMgr.triggerEat(false);
             audioMgr.beepEat();
-            Serial.println("[ACTION] Eat!");
             break;
 
         case INPUT_EVENT_ACTION_SLEEP:
             if (petMgr.getState().isSleeping) {
                 petMgr.setSleep(false);
                 displayMgr.setAnimState(ANIM_IDLE);
-                Serial.println("[ACTION] Woke up!");
             } else {
                 petMgr.setSleep(true);
                 displayMgr.setAnimState(ANIM_SLEEP);
-                Serial.println("[ACTION] Sleeping...");
             }
             break;
 
         case INPUT_EVENT_ACTION_HAPPY:
             displayMgr.triggerSecretStars();
             audioMgr.beepSecretReward();
-            Serial.println("[ACTION] Happy celebration!");
             break;
 
         default:
@@ -320,8 +357,7 @@ void loop() {
     // 2. Process Motion & IMU Events
     // ==========================================
     MotionEvent mEv = motionMgr.popEvent();
-    // A button tap jolts the stick: ignore IMU jump/roar for 600ms after any button event
-    if ((mEv == MOTION_EVENT_JUMP || mEv == MOTION_EVENT_ROAR) && (now - lastButtonEventMs) < 600) {
+    if ((mEv == MOTION_EVENT_JUMP || mEv == MOTION_EVENT_ROAR || mEv == MOTION_EVENT_STEP) && (now - lastButtonEventMs) < 600) {
         mEv = MOTION_EVENT_NONE;
     }
     if (mEv != MOTION_EVENT_NONE) {
@@ -329,15 +365,31 @@ void loop() {
     }
 
     switch (mEv) {
+        case MOTION_EVENT_STEP:
+            // Upgrade 1: Pedometer Step Counter + Fossil Loot Drops
+            if (petMgr.recordStep()) {
+                displayMgr.showToast("FOSSIL FOUND! +EXP");
+                displayMgr.triggerSecretStars();
+                audioMgr.beepSecretReward();
+            }
+            break;
+
         case MOTION_EVENT_JUMP:
-            if (!petMgr.getState().isSleeping && displayMgr.getAnimState() == ANIM_IDLE) {
+            if (displayMgr.isBattleActive()) {
+                displayMgr.handleBattleInput();
+                audioMgr.beepRoar();
+            } else if (!petMgr.getState().isSleeping && displayMgr.getAnimState() == ANIM_IDLE) {
                 displayMgr.triggerJump();
                 audioMgr.beepJump();
             }
             break;
 
         case MOTION_EVENT_ROAR:
-            if (!petMgr.getState().isSleeping && displayMgr.getAnimState() == ANIM_IDLE) {
+            if (displayMgr.isBattleActive()) {
+                displayMgr.handleBattleInput();
+                audioMgr.beepRoar();
+            } else if (!petMgr.getState().isSleeping && displayMgr.getAnimState() == ANIM_IDLE) {
+                // Shaking the stick also cycles prehistoric weather when in Eruption or triggers Roar!
                 displayMgr.triggerRoar();
                 audioMgr.beepRoar();
             }
@@ -354,7 +406,6 @@ void loop() {
             break;
 
         case MOTION_EVENT_BEDTIME:
-            // Put pet to sleep and enter power saving
             audioMgr.beepSnore();
             powerMgr.enterBedtimeSleep(displayMgr, petMgr);
             break;
@@ -369,14 +420,12 @@ void loop() {
     petMgr.tick(now);
     petMgr.checkAutoSave(now);
 
-    // Evolution trigger check
     if (petMgr.hasPendingEvolution()) {
         petMgr.clearPendingEvolution();
-        displayMgr.setAnimState(ANIM_EVOLVING);
+        displayMgr.triggerEvolutionSequence(petMgr.getState().stage);
         audioMgr.beepLevelUp();
     }
 
-    // Periodic attention alert call sound if hunger == 0 or sick
     if (petMgr.needsAlert() && (now - lastAlertSoundTime >= 60000)) {
         lastAlertSoundTime = now;
         audioMgr.beepAlert();
@@ -395,6 +444,5 @@ void loop() {
     // ==========================================
     displayMgr.update(petMgr, motionMgr.getTiltBiasX(), now);
 
-    // Frame pacing (~60 FPS)
     delay(16);
 }

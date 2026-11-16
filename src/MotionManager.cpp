@@ -10,6 +10,8 @@ MotionManager::MotionManager()
       _faceDownStartTime(0),
       _lastJumpTime(0),
       _lastShakeTime(0),
+      _lastStepTime(0),
+      _stepPeakArmed(false),
       _jumpArmed(false),
       _jumpArmTime(0),
       _pendingEvent(MOTION_EVENT_NONE) {}
@@ -25,6 +27,7 @@ void MotionManager::reset() {
     _isUpsideDown = false;
     _isFaceDown = false;
     _faceDownStartTime = 0;
+    _stepPeakArmed = false;
     _jumpArmed = false;
     _pendingEvent = MOTION_EVENT_NONE;
 }
@@ -61,6 +64,23 @@ void MotionManager::update(uint32_t nowMillis) {
     // Calculate approximate pitch and roll angles
     float pitch = atan2f(-_ax, sqrtf(_ay * _ay + _az * _az)) * (180.0f / M_PI);
     float roll = atan2f(_ay, _az) * (180.0f / M_PI);
+
+    // 1b. Upgrade 1: Pedometer Step Detection
+    // Gentle rhythmic walking step (1.18G..1.72G peak followed by <1.04G trough, >=320ms cadence)
+    if (!_stepPeakArmed && mag >= 1.18f && mag < MOTION_JUMP_THRESHOLD_G && (nowMillis - _lastStepTime >= 320)) {
+        _stepPeakArmed = true;
+    } else if (_stepPeakArmed) {
+        if (mag < 1.04f) {
+            _stepPeakArmed = false;
+            _lastStepTime = nowMillis;
+            if (_pendingEvent == MOTION_EVENT_NONE) {
+                _pendingEvent = MOTION_EVENT_STEP;
+            }
+        } else if (mag >= MOTION_JUMP_THRESHOLD_G) {
+            // Escalated into a jump or shake
+            _stepPeakArmed = false;
+        }
+    }
 
     // 2. Jump Detection (Z / Vertical Impulse)
     // Positive vertical impulse (> 1.8G) followed by low-G

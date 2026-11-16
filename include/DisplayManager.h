@@ -21,6 +21,21 @@ enum SkyTime : uint8_t {
     SKY_COUNT
 };
 
+// Upgrade 5: Dynamic Prehistoric Weather & Volcanic Eruption Events
+enum WeatherType : uint8_t {
+    WEATHER_CLEAR = 0,
+    WEATHER_ASH_FALL,
+    WEATHER_ACID_RAIN,
+    WEATHER_ERUPTION,
+    WEATHER_COUNT
+};
+
+// Upgrade 6: Second Mini-Game ("Tilt Lava Dodge")
+enum MiniGameMode : uint8_t {
+    MINIGAME_METEOR_STRIKE = 0,
+    MINIGAME_TILT_LAVA_DODGE
+};
+
 class DisplayManager {
 public:
     DisplayManager();
@@ -39,14 +54,21 @@ public:
     void triggerCleanGeyser();
     void triggerEvolutionSequence(uint8_t targetStage);
 
-    // Mini-Game
+    // Mini-Games (Idea 6: alternates Meteor Strike & Tilt Lava Dodge)
     void startMiniGame();
     bool isMiniGameActive() const { return _miniGameActive; }
     void handleMiniGameInput();
 
-    // Atmosphere
+    // Upgrade 3: Wireless ESP-NOW / IR PvP & Rival Dino Battle
+    void startBattle(uint8_t currentStage);
+    bool isBattleActive() const { return _battleActive; }
+    void handleBattleInput();
+
+    // Atmosphere & Weather (Idea 5)
     void toggleSkyTime();
     SkyTime getSkyTime() const { return _currentSky; }
+    void cycleWeather();
+    WeatherType getWeather() const { return _currentWeather; }
 
     // Menu HUD Control
     void setMenuOpen(bool open);
@@ -66,7 +88,6 @@ public:
     void showOtaProgress(unsigned int progress, unsigned int total);
 
 private:
-    // Feedback toast + menu auto-close
     char     _toastText[24] = {0};
     uint32_t _toastUntil = 0;
     uint32_t _menuLastActivity = 0;
@@ -103,25 +124,41 @@ private:
     MenuItem _selectedMenu;
     bool _showStats;
 
-    // Feature 1: Day/Night Cycle
+    // Feature 1 & Upgrade 5: Day/Night Cycle + Prehistoric Weather
     SkyTime _currentSky;
     uint32_t _lastSkyCycleTime;
+    WeatherType _currentWeather;
+    uint32_t _lastWeatherChangeTime;
 
     // Feature 2: Thought & Emotion Bubbles
     uint32_t _lastThoughtTime;
     uint32_t _thoughtStartTime;
-    uint8_t _activeThoughtType; // 0=None, 1=Meat, 2=Music, 3=Zzz, 4=Heart, 5=Bolt
+    uint8_t _activeThoughtType;
 
-    // Feature 3: Meteor Strike Mini-Game
+    // Feature 3 & Upgrade 6: Dual Training Mini-Games (Meteor Strike + Tilt Lava Dodge)
     bool _miniGameActive;
+    MiniGameMode _miniGameMode;
+    uint8_t _nextMiniGameToggle;
     uint32_t _miniGameStartTime;
     float _meteorX;
     float _meteorY;
     float _meteorVy;
+    float _bonusMeatX;
+    float _bonusMeatY;
     int8_t _miniGameScore;
     int8_t _miniGameRound;
     bool _miniGameStruck;
     uint32_t _miniGameStrikeTime;
+
+    // Upgrade 3: Wireless ESP-NOW / Rival Dino Battle State
+    bool _battleActive;
+    uint32_t _battleStartTime;
+    int16_t _playerHp;
+    int16_t _rivalHp;
+    uint8_t _battleCharge;
+    uint8_t _rivalStage;
+    uint32_t _lastRivalAttackTime;
+    bool _peerDiscovered;
 
     // Feature 4: Geyser Cleaning Animation
     bool _isCleaningGeyser;
@@ -134,14 +171,17 @@ private:
 
     // Sub-draw routines
     void drawBackground();
+    void drawWeather(uint32_t nowMillis);
     void drawGround();
     void drawHud(const PetStateManager& petMgr);
     void drawMenu();
     void drawStats(const PetStateManager& petMgr);
     void drawPet(const PetStateManager& petMgr, uint32_t nowMillis);
+    void drawAccessory(uint8_t acc, int headX, int headY, int centerX, int centerY, uint32_t nowMillis);
     void drawPoops(uint8_t count);
     void drawThoughtBubble(int petHeadX, int petHeadY, uint32_t nowMillis);
-    void drawMiniGame(uint32_t nowMillis, PetStateManager& petMgr);
+    void drawMiniGame(uint32_t nowMillis, float tiltBiasX, PetStateManager& petMgr);
+    void drawBattle(uint32_t nowMillis, PetStateManager& petMgr);
     void drawCleanGeyser(uint32_t nowMillis, PetStateManager& petMgr);
     void drawEvolutionSequence(uint32_t nowMillis);
     void drawEatingEffect(uint32_t elapsed);
@@ -149,9 +189,6 @@ private:
     void drawZzzEffect(uint32_t elapsed);
     void drawStarsEffect(uint32_t elapsed);
 
-    // Generic scaled 1-bit bitmap renderer
     void drawBitmapScaled(int x, int y, const uint8_t* bitmap, int w, int h, int scale, uint16_t color, bool flipX = false);
-
-    // Full-color 16-bit RGB565 sprite renderer with chromakey transparency
     void drawSpriteRGB565(int x, int y, const SpriteInfo& sprite, bool flipX = false);
 };

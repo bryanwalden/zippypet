@@ -4,7 +4,7 @@
 #include "GeneratedSprites.h"
 
 // Firmware Release Version for GitHub Pull-OTA
-#define FIRMWARE_VERSION     2
+#define FIRMWARE_VERSION     3
 
 // ==========================================
 // Hardware & Display Configuration
@@ -87,14 +87,46 @@ enum AnimState : uint8_t {
 };
 
 // ==========================================
-// Top HUD Menu Items
+// Top HUD Menu Items (5-Icon Dock)
 // ==========================================
 enum MenuItem : uint8_t {
     MENU_FEED = 0,
     MENU_TRAIN,
     MENU_CLEAN,
+    MENU_BATTLE,
     MENU_STATS,
     MENU_COUNT
+};
+
+// ==========================================
+// Unlockable Relics & Accessories (Idea 7)
+// ==========================================
+enum PetAccessory : uint8_t {
+    ACC_NONE = 0,
+    ACC_CROWN,       // Unlocked at Level 3+ or 50+ steps
+    ACC_CYBER_VISOR, // Unlocked by scoring 2+ in Meteor Strike or Tilt Dodge
+    ACC_CHEF_HAT,    // Unlocked by feeding 3+ times
+    ACC_THUNDER_AURA,// Unlocked by winning a battle or Gen 2+
+    ACC_COUNT
+};
+
+static const uint8_t PROGMEM icon_battle[32] = {
+    0x00, 0x00,
+    0x80, 0x01,
+    0xC0, 0x03,
+    0x60, 0x06,
+    0x30, 0x0C,
+    0x18, 0x18,
+    0x0C, 0x30,
+    0x06, 0x60,
+    0x03, 0xC0,
+    0x07, 0xE0,
+    0x0D, 0xB0,
+    0x38, 0x1C,
+    0x70, 0x0E,
+    0x20, 0x04,
+    0x00, 0x00,
+    0x00, 0x00
 };
 
 // ==========================================

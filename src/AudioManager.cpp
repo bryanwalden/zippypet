@@ -6,7 +6,11 @@ AudioManager::AudioManager()
       _noteStartTime(0),
       _currentNoteDuration(0),
       _stepIndex(0),
-      _stepCount(0) {
+      _stepCount(0),
+      _lastMicSampleTime(0),
+      _lastClapTime(0),
+      _voiceTriggered(false),
+      _voiceLevel(0) {
     memset(_sequence, 0, sizeof(_sequence));
 }
 
@@ -28,6 +32,13 @@ void AudioManager::playSequence(const NoteStep* steps, uint8_t count) {
     if (!M5.Speaker.isEnabled()) return;
     if (count == 0 || count > 8) return;
 
+    // Ensure speaker owns I2S bus before playing tone
+    if (M5.Mic.isEnabled()) {
+        M5.Mic.end();
+    }
+    M5.Speaker.begin();
+    M5.Speaker.setVolume(_volume);
+
     memcpy(_sequence, steps, sizeof(NoteStep) * count);
     _stepCount = count;
     _stepIndex = 0;
@@ -42,24 +53,60 @@ void AudioManager::playSequence(const NoteStep* steps, uint8_t count) {
     }
 }
 
-void AudioManager::update(uint32_t nowMillis) {
-    if (!M5.Speaker.isEnabled() || !_isPlaying) return;
+bool AudioManager::popVoiceTrigger() {
+    bool v = _voiceTriggered;
+    _voiceTriggered = false;
+    return v;
+}
 
-    if (nowMillis - _noteStartTime >= _currentNoteDuration) {
-        _stepIndex++;
-        if (_stepIndex < _stepCount) {
-            _noteStartTime = nowMillis;
-            _currentNoteDuration = _sequence[_stepIndex].durationMs;
-            if (_sequence[_stepIndex].freq > 0) {
-                M5.Speaker.tone(_sequence[_stepIndex].freq, _currentNoteDuration);
+void AudioManager::update(uint32_t nowMillis) {
+    if (_isPlaying) {
+        if (!M5.Speaker.isEnabled()) {
+            _isPlaying = false;
+            return;
+        }
+        if (nowMillis - _noteStartTime >= _currentNoteDuration) {
+            _stepIndex++;
+            if (_stepIndex < _stepCount) {
+                _noteStartTime = nowMillis;
+                _currentNoteDuration = _sequence[_stepIndex].durationMs;
+                if (_sequence[_stepIndex].freq > 0) {
+                    M5.Speaker.tone(_sequence[_stepIndex].freq, _currentNoteDuration);
+                } else {
+                    M5.Speaker.stop();
+                }
             } else {
+                _isPlaying = false;
                 M5.Speaker.stop();
             }
-        } else {
-            _isPlaying = false;
-            M5.Speaker.stop();
         }
+        return;
     }
+
+#if !defined(WOKWI_SIM) && !defined(ARDUINO_M5STACK_CORES3)
+    // Upgrade 2: Periodic non-blocking Microphone Clap / Voice check when speaker is idle
+    if (M5.Mic.isEnabled() && (nowMillis - _lastMicSampleTime >= 260) && (nowMillis - _noteStartTime >= 400)) {
+        _lastMicSampleTime = nowMillis;
+        int16_t samples[32];
+        M5.Speaker.end();
+        M5.Mic.begin();
+        if (M5.Mic.record(samples, 32, 16000)) {
+            int32_t peak = 0;
+            for (int i = 0; i < 32; ++i) {
+                int32_t v = abs((int32_t)samples[i]);
+                if (v > peak) peak = v;
+            }
+            _voiceLevel = (uint8_t)min((int32_t)100, peak / 220);
+            if (peak > 8500 && (nowMillis - _lastClapTime > 1800)) {
+                _lastClapTime = nowMillis;
+                _voiceTriggered = true;
+            }
+        }
+        M5.Mic.end();
+        M5.Speaker.begin();
+        M5.Speaker.setVolume(_volume);
+    }
+#endif
 }
 
 void AudioManager::beepSelect() {
@@ -70,7 +117,6 @@ void AudioManager::beepSelect() {
 }
 
 void AudioManager::beepAlert() {
-    // Classic 3-tone Bandai V-Pet call alert: High, Medium, Higher with pause
     static const NoteStep alertSteps[] = {
         { 1046, 90 }, // C6
         { 0,    40 },
@@ -82,7 +128,6 @@ void AudioManager::beepAlert() {
 }
 
 void AudioManager::beepRoar() {
-    // Low aggressive frequency sweep for battle / shake
     static const NoteStep roarSteps[] = {
         { 340, 80 },
         { 260, 90 },
@@ -93,7 +138,6 @@ void AudioManager::beepRoar() {
 }
 
 void AudioManager::beepLevelUp() {
-    // Triumphant arpeggio fanfare (C5, E5, G5, C6, E6)
     static const NoteStep fanSteps[] = {
         { 523,  70 },  // C5
         { 659,  70 },  // E5
@@ -105,7 +149,6 @@ void AudioManager::beepLevelUp() {
 }
 
 void AudioManager::beepSnore() {
-    // Faint bedtime gentle buzz
     static const NoteStep snoreStep[] = {
         { 110, 250 }
     };
@@ -113,7 +156,6 @@ void AudioManager::beepSnore() {
 }
 
 void AudioManager::beepSecretReward() {
-    // Star sparkle reward arpeggio
     static const NoteStep starSteps[] = {
         { 1318, 60 },
         { 1568, 60 },
@@ -123,7 +165,6 @@ void AudioManager::beepSecretReward() {
 }
 
 void AudioManager::beepEat() {
-    // Munching crunch chirp
     static const NoteStep eatSteps[] = {
         { 880,  40 },
         { 0,    20 },
@@ -133,7 +174,6 @@ void AudioManager::beepEat() {
 }
 
 void AudioManager::beepJump() {
-    // Rising hop sound
     static const NoteStep jumpSteps[] = {
         { 480, 40 },
         { 760, 60 }

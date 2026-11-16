@@ -31,6 +31,10 @@ public:
 
     bool isPlaying() const { return _isPlaying; }
 
+    // Upgrade 2: Voice & Clap Detection via Onboard Microphone
+    bool popVoiceTrigger();
+    uint8_t getVoiceLevel() const { return _voiceLevel; }
+
 private:
     uint8_t _volume;
     bool _isPlaying;
@@ -39,6 +43,12 @@ private:
     uint8_t _stepIndex;
     uint8_t _stepCount;
     NoteStep _sequence[8];
+
+    // Upgrade 2: Microphone sampling state
+    uint32_t _lastMicSampleTime = 0;
+    uint32_t _lastClapTime = 0;
+    bool _voiceTriggered = false;
+    uint8_t _voiceLevel = 0;
 
     void playSequence(const NoteStep* steps, uint8_t count);
 };

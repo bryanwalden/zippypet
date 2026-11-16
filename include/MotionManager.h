@@ -10,7 +10,8 @@ enum MotionEvent : uint8_t {
     MOTION_EVENT_ROAR,
     MOTION_EVENT_INVERT_START,
     MOTION_EVENT_INVERT_END,
-    MOTION_EVENT_BEDTIME
+    MOTION_EVENT_BEDTIME,
+    MOTION_EVENT_STEP       // Upgrade 1: Pedometer step detected
 };
 
 class MotionManager {
@@ -38,6 +39,8 @@ private:
     uint32_t _faceDownStartTime;
     uint32_t _lastJumpTime;
     uint32_t _lastShakeTime;
+    uint32_t _lastStepTime;
+    bool _stepPeakArmed;
 
     // Jump detection state machine
     bool _jumpArmed;

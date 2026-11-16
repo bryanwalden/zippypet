@@ -83,6 +83,10 @@ void InputManager::update(uint32_t nowMillis) {
             _pendingEvent = INPUT_EVENT_TOGGLE_SKY;
             _interactedThisFrame = true;
             return;
+        } else if (c == 'w' || c == 'W') {
+            _pendingEvent = INPUT_EVENT_CYCLE_WEATHER;
+            _interactedThisFrame = true;
+            return;
         }
     }
 
